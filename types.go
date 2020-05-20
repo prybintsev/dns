@@ -209,8 +209,11 @@ var CertTypeToString = map[uint16]string{
 
 //go:generate go run types_generate.go
 
-// Question holds a DNS question. There can be multiple questions in the
-// question section of a message. Usually there is just one.
+// Question holds a DNS question. Usually there is just one. While the
+// original DNS RFCs allow multiple questions in the question section of a
+// message, in practice it never works. Because most DNS servers see multiple
+// questions as an error, it is recommended to only have one question per
+// message.
 type Question struct {
 	Name   string `dns:"cdomain-name"` // "cdomain-name" specifies encoding (and may be compressed)
 	Qtype  uint16
@@ -503,15 +506,10 @@ func sprintTxtOctet(s string) string {
 		}
 
 		b, n := nextByte(s, i)
-		switch {
-		case n == 0:
+		if n == 0 {
 			i++ // dangling back slash
-		case b == '.':
-			dst.WriteByte('.')
-		case b < ' ' || b > '~':
-			dst.WriteString(escapeByte(b))
-		default:
-			dst.WriteByte(b)
+		} else {
+			writeTXTStringByte(&dst, b)
 		}
 		i += n
 	}
@@ -1118,6 +1116,7 @@ type URI struct {
 	Target   string `dns:"octet"`
 }
 
+// rr.Target to be parsed as a sequence of character encoded octets according to RFC 3986
 func (rr *URI) String() string {
 	return rr.Hdr.String() + strconv.Itoa(int(rr.Priority)) +
 		" " + strconv.Itoa(int(rr.Weight)) + " " + sprintTxtOctet(rr.Target)
@@ -1279,6 +1278,7 @@ type CAA struct {
 	Value string `dns:"octet"`
 }
 
+// rr.Value Is the character-string encoding of the value field as specified in RFC 1035, Section 5.1.
 func (rr *CAA) String() string {
 	return rr.Hdr.String() + strconv.Itoa(int(rr.Flag)) + " " + rr.Tag + " " + sprintTxtOctet(rr.Value)
 }
